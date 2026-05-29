@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Users, Globe, Calendar, Clock, Tv, Eye, Sparkles, User, Award, Film, CircleDot
+  Users, Globe, Calendar, Clock, Tv, Eye, Sparkles, User, Award, Film, CircleDot,
+  Copy, Check
 } from 'lucide-react';
 import { MovieInfo, MovieDetailResponse } from '../types';
 
@@ -28,6 +29,70 @@ export default function MovieBentoDetail({
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<MovieInfo | null>(null);
+
+  // States for AI Review Generator
+  const [keywords, setKeywords] = useState<string[]>(['', '', '']);
+  const [aiLoading, setAiLoading] = useState<boolean>(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [generatedReview, setGeneratedReview] = useState<string | null>(null);
+  const [copied, setCopied] = useState<boolean>(false);
+
+  const PRESET_KEYWORDS = ['스릴만점', '눈물펑펑', '반전영화', '연기천재', '영상미대박', '여운이남는', '가족영화', '꿀잼보장', '인생명작'];
+
+  const handlePresetClick = (preset: string) => {
+    const emptyIdx = keywords.findIndex(k => k.trim() === '');
+    if (emptyIdx !== -1) {
+      const next = [...keywords];
+      next[emptyIdx] = preset;
+      setKeywords(next);
+    } else {
+      const next = [...keywords];
+      next[2] = preset;
+      setKeywords(next);
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (keywords.some(k => k.trim() === '')) {
+      setAiError('3개의 키워드를 모두 채우거나 선택해 주세요.');
+      return;
+    }
+    try {
+      setAiLoading(true);
+      setAiError(null);
+      setGeneratedReview(null);
+
+      const response = await fetch('/api/generate-comment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          movieNm,
+          keywords: keywords.map(k => k.trim())
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('감상평 생성에 실패했습니다.');
+      }
+
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      setGeneratedReview(data.comment);
+    } catch (err: any) {
+      setAiError(err.message || '오류가 발생했습니다.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleCopy = () => {
+    if (!generatedReview) return;
+    navigator.clipboard.writeText(generatedReview);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2005);
+  };
 
   useEffect(() => {
     let active = true;
@@ -329,6 +394,250 @@ export default function MovieBentoDetail({
           />
         </div>
       </div>
+
+      {/* 7. AI Keyword Review Generator Box */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.15, duration: 0.4 }}
+        className={`col-span-1 sm:col-span-4 p-6 sm:p-8 rounded-3xl border transition-all ${
+          isDark 
+            ? 'bg-gradient-to-br from-[#12121D]/90 to-slate-950/90 border-[#1F1F35] text-white' 
+            : 'bg-gradient-to-br from-indigo-50/50 via-white to-white border-slate-200 text-slate-900 shadow-sm'
+        }`}
+        id="bento-ai-review"
+      >
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-dashed border-indigo-500/10 dark:border-white/10 border-slate-100 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-amber-500/15">
+              <Sparkles className="w-5 h-5 text-amber-100 animate-pulse" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <span>AI 감상평 메이커</span>
+                <span className="text-[10px] uppercase font-mono font-black border border-amber-500/30 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500">
+                  GEMINI 3.5 FLASH
+                </span>
+              </h3>
+              <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                원하는 평론 키워드 3개를 입력하면, AI가 맞춤형 웰메이드 감상평을 한글로 작성합니다.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
+          {/* Left panel: Input and Preset tags */}
+          <div className="md:col-span-5 flex flex-col justify-between space-y-4">
+            <div className="space-y-3">
+              <label className="text-[10px] font-extrabold uppercase tracking-widest text-[#888899] dark:text-[#888899] text-slate-550 block">
+                감상 키워드 3가지
+              </label>
+              
+              <div className="flex flex-col gap-2.5">
+                {keywords.map((kw, idx) => (
+                  <div key={idx} className="relative flex items-center">
+                    <span className="absolute left-3 text-xs font-bold text-amber-500">
+                      #{idx + 1}
+                    </span>
+                    <input
+                      type="text"
+                      value={kw}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const next = [...keywords];
+                        next[idx] = val;
+                        setKeywords(next);
+                      }}
+                      placeholder={`예: ${['긴장감넘치는', '배우들인생작', '반전대박'][idx]}`}
+                      className={`w-full pl-9 pr-8 py-2 text-xs rounded-xl border font-bold focus:outline-none transition-all ${
+                        isDark 
+                          ? 'bg-black/40 border-white/10 text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20' 
+                          : 'bg-white border-slate-205 text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20'
+                      }`}
+                    />
+                    {kw && (
+                      <button 
+                        onClick={() => {
+                          const next = [...keywords];
+                          next[idx] = '';
+                          setKeywords(next);
+                        }}
+                        className="absolute right-3 text-slate-400 hover:text-rose-500 transition-colors w-5 h-5 flex items-center justify-center font-bold"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Presets suggestions */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-extrabold text-[#888899] dark:text-[#888899] uppercase tracking-widest">추천 시네키워드</span>
+                <button 
+                  onClick={() => setKeywords(['', '', ''])}
+                  className="text-[9px] font-bold text-rose-500 hover:underline flex items-center gap-0.5"
+                >
+                  초기화
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {PRESET_KEYWORDS.map((preset) => {
+                  const isAlreadySelected = keywords.includes(preset);
+                  return (
+                    <button
+                      key={preset}
+                      onClick={() => handlePresetClick(preset)}
+                      disabled={isAlreadySelected}
+                      className={`px-2 py-1 text-[11px] rounded-lg border font-semibold transition-all ${
+                        isAlreadySelected
+                          ? 'opacity-30 cursor-not-allowed bg-slate-200 dark:bg-white/5 text-slate-400 border-transparent'
+                          : isDark
+                            ? 'bg-white/5 border-white/5 hover:border-indigo-500/30 text-slate-300 hover:text-white hover:bg-white/10'
+                            : 'bg-slate-100 border-slate-200 hover:border-indigo-300 text-slate-650 hover:text-indigo-600'
+                      }`}
+                    >
+                      +{preset}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Submit generate button */}
+            <button
+              onClick={handleGenerate}
+              disabled={aiLoading}
+              className={`w-full py-2.5 rounded-xl font-black text-xs transition-transform active:scale-95 flex items-center justify-center gap-2 ${
+                aiLoading
+                  ? 'bg-slate-300 dark:bg-indigo-950/40 text-slate-500 cursor-not-allowed'
+                  : 'bg-amber-500 text-black shadow-md shadow-amber-500/10 hover:bg-amber-400'
+              }`}
+            >
+              {aiLoading ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                  <span>감상평 작문 중...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>스마트 감상평 생성하기</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Right panel: Output preview screen */}
+          <div className="md:col-span-7 flex flex-col justify-between">
+            <div className={`p-5 rounded-2xl border flex-1 flex flex-col justify-center min-h-[160px] relative transition-all ${
+              isDark 
+                ? 'bg-black/30 border-white/5' 
+                : 'bg-slate-50 border-slate-200'
+            }`}>
+              <AnimatePresence mode="wait">
+                {aiLoading ? (
+                  <motion.div 
+                    key="ai-loading"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex flex-col items-center justify-center space-y-3 py-6"
+                  >
+                    <div className="relative">
+                      <div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin"></div>
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-500 absolute inset-0 m-auto animate-pulse" />
+                    </div>
+                    <div className="text-center space-y-1">
+                      <p className="text-xs font-semibold text-slate-200 dark:text-slate-100">
+                        "{movieNm}"의 평론 시퀀스를 조합하는 중...
+                      </p>
+                      <p className="text-[10px] text-slate-500">
+                        Gemini AI 모델이 추천 감상평 문장을 빚어내고 있습니다.
+                      </p>
+                    </div>
+                  </motion.div>
+                ) : aiError ? (
+                  <motion.div 
+                    key="ai-error"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="text-center py-6"
+                  >
+                    <CircleDot className="w-6 h-6 text-rose-500 mx-auto mb-2 animate-bounce" />
+                    <p className="text-xs font-semibold text-rose-500">{aiError}</p>
+                  </motion.div>
+                ) : generatedReview ? (
+                  <motion.div 
+                    key="ai-success"
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="space-y-4"
+                  >
+                    {/* Copy Success indicator */}
+                    <div className="flex items-center justify-between border-b border-white/5 dark:border-white/5 border-slate-200 pb-2.5">
+                      <span className="text-[10px] font-bold text-amber-500 flex items-center gap-1 uppercase tracking-wider">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" /> GENIALLY CRAFTED REVIEW
+                      </span>
+                      <button
+                        onClick={handleCopy}
+                        className={`px-2.5 py-1 text-[11px] rounded-lg flex items-center gap-1.5 font-bold border transition-all ${
+                          copied 
+                            ? 'bg-emerald-500 text-white border-emerald-500' 
+                            : isDark
+                              ? 'bg-white/5 border-white/5 hover:bg-white/10 text-slate-300'
+                              : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                        }`}
+                      >
+                        {copied ? (
+                          <>
+                            <Check className="w-3 h-3 text-white" />
+                            <span>클립보드 복사 완료!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3 text-indigo-500" />
+                            <span>감상평 복사</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <p className={`text-xs leading-relaxed font-semibold font-sans whitespace-pre-wrap select-text italic ${
+                      isDark ? 'text-slate-100' : 'text-slate-800'
+                    }`}>
+                      {"“ " + generatedReview.trim().replace(/^"|"$/g, '') + " ”"}
+                    </p>
+                  </motion.div>
+                ) : (
+                  <motion.div 
+                    key="ai-prompt"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="text-center py-6 text-slate-500"
+                  >
+                    <CircleDot className="w-5 h-5 text-amber-500 mx-auto mb-2 opacity-50 animate-pulse" />
+                    <p className="text-xs font-semibold leading-relaxed">
+                      왼쪽에서 3개의 키워드를 작성하거나<br />
+                      추천 태그를 조합하여 <span className="text-amber-500 font-bold">감상평을 빌드</span>해 보세요!
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            
+            <p className="text-[10px] text-slate-500 mt-2 font-mono text-right">
+              *작성 버튼을 누르면 Gemini 3.5 Flash 모델의 실시간 평리가 기고됩니다.
+            </p>
+          </div>
+        </div>
+      </motion.div>
     </div>
   );
 }
