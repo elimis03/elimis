@@ -28,25 +28,39 @@ async function startServer() {
         return;
       }
 
-      const ai = new GoogleGenAI({
-        apiKey: apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          }
-        }
-      });
-
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
       const prompt = `영화 "${movieNm}"을 관람한 뒤에 남겨진 흥미롭고 감성적인 감상평을 작성해주세요.
 반드시 제공된 3개의 핵심 키워드 [${keywords.join(', ')}]가 문장 내에 매우 자연스럽고 유기적으로 포함되어야 합니다.
 감상평은 3~5줄 분량의 품격 있고 몰입감 있는 한국어 톤앤매너로 작성하여 신선한 인상을 주도록 디자인해주세요.`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.5-flash',
-        contents: prompt,
+      const apiResponse = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'aistudio-build'
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: prompt }]
+            }
+          ]
+        })
       });
 
-      res.json({ comment: response.text });
+      if (!apiResponse.ok) {
+        const errorText = await apiResponse.text();
+        throw new Error(`Gemini API Error: ${apiResponse.status} - ${errorText}`);
+      }
+
+      const responseData = await apiResponse.json();
+      const candidateText = responseData?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!candidateText) {
+        throw new Error('Gemini API 응답에서 감상평 텍스트를 파싱할 수 없습니다.');
+      }
+
+      res.json({ comment: candidateText });
     } catch (error: any) {
       console.error('Error in /api/generate-comment:', error);
       res.status(500).json({ error: error.message || 'Internal Server Error' });
