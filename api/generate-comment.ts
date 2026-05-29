@@ -15,28 +15,17 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    // 1. Robust Body Parsing helper supporting all runtimes and configurations
+    // 1. Safe Body Parsing supporting auto-parsed bodies in Vercel
     let body = req.body;
-    if (!body || (typeof body === 'object' && Object.keys(body).length === 0)) {
-      body = await new Promise((resolve) => {
-        let rawData = '';
-        req.on('data', (chunk: any) => {
-          rawData += chunk;
-        });
-        req.on('end', () => {
-          try {
-            resolve(JSON.parse(rawData));
-          } catch (e) {
-            resolve({});
-          }
-        });
-      });
-    } else if (typeof body === 'string') {
+    if (typeof body === 'string') {
       try {
         body = JSON.parse(body);
       } catch (e) {
         body = {};
       }
+    }
+    if (!body || typeof body !== 'object') {
+      body = {};
     }
 
     const { movieNm, keywords } = body;

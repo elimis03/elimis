@@ -71,15 +71,22 @@ export default function MovieBentoDetail({
         })
       });
 
-      if (!response.ok) {
-        throw new Error('감상평 생성에 실패했습니다.');
+      let responseData: any = null;
+      try {
+        responseData = await response.json();
+      } catch (e) {
+        // Fallback if not JSON
       }
 
-      const data = await response.json();
-      if (data.error) {
-        throw new Error(data.error);
+      if (!response.ok) {
+        const errMsg = responseData?.error || '감상평 생성에 실패했습니다.';
+        throw new Error(errMsg);
       }
-      setGeneratedReview(data.comment);
+
+      if (responseData?.error) {
+        throw new Error(responseData.error);
+      }
+      setGeneratedReview(responseData?.comment || '');
     } catch (err: any) {
       setAiError(err.message || '오류가 발생했습니다.');
     } finally {
