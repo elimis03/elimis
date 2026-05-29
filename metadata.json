@@ -1,0 +1,6 @@
+{
+  "name": "Kobis Box Office",
+  "description": "일별 박스오피스 순위 및 영화 상세 정보를 조회할 수 있는 웹 페이지입니다. 날짜별 조회와 라이트/다크 모드를 지원합니다.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
